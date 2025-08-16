@@ -14,10 +14,10 @@ router.get('/detailed', asyncHandler(healthController.detailedHealthCheck));
 // ✅ DB test route
 router.get('/db-test', async (req, res) => {
   try {
-    const result = await db.query('SELECT NOW()'); // Postgres test
+    const result = await db.query('SELECT NOW()'); // returns rows array
     res.json({
       success: true,
-      databaseTime: result[0]?.now || result.rows?.[0]?.now, // ✅ safe check
+      databaseTime: result[0]?.now || null, // ✅ correct indexing
     });
   } catch (error) {
     res.status(500).json({
