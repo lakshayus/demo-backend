@@ -5,17 +5,19 @@ const healthController = require('../controllers/healthController');
 const { asyncHandler } = require('../middleware/errorHandler');
 const db = require('../config/database'); // ✅ import your database.js
 
-// Health check routes
+// Basic health check
 router.get('/', asyncHandler(healthController.healthCheck));
+
+// Detailed health check
 router.get('/detailed', asyncHandler(healthController.detailedHealthCheck));
 
 // ✅ DB test route
 router.get('/db-test', async (req, res) => {
   try {
-    const result = await db.query('SELECT NOW()'); // works for Postgres
+    const result = await db.query('SELECT NOW()'); // Postgres test
     res.json({
       success: true,
-      databaseTime: result[0].now || result[0].now(), // Postgres returns `now`
+      databaseTime: result[0]?.now || result.rows?.[0]?.now, // ✅ safe check
     });
   } catch (error) {
     res.status(500).json({
@@ -25,7 +27,7 @@ router.get('/db-test', async (req, res) => {
   }
 });
 
-// Optional catch-all for undefined health routes
+// Catch-all for undefined health routes
 router.use('*', (req, res) => {
   res.status(404).json({
     error: 'Health endpoint not found',
