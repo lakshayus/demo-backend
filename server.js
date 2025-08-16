@@ -9,7 +9,7 @@ const dotenv = require('dotenv');
 // Load environment variables
 dotenv.config();
 
-// Import routes
+// Import routes (these must each export an express.Router!)
 const questionnaireRoutes = require('./routes/questionnaire');
 const demoRoutes = require('./routes/demo');
 const leadRoutes = require('./routes/leads');
@@ -37,13 +37,12 @@ app.use(helmet({
 
 // Rate limiting
 const limiter = rateLimit({
-  windowMs: 15 * 60 * 1000, // 15 minutes
-  max: 100, // limit each IP to 100 requests per windowMs
+  windowMs: 15 * 60 * 1000,
+  max: 100,
   message: 'Too many requests from this IP, please try again later.',
   standardHeaders: true,
   legacyHeaders: false,
 });
-
 app.use(limiter);
 
 // CORS configuration
@@ -53,12 +52,9 @@ app.use(cors({
   optionsSuccessStatus: 200
 }));
 
-// Body parsing middleware
 app.use(compression());
 app.use(express.json({ limit: '10mb' }));
 app.use(express.urlencoded({ extended: true, limit: '10mb' }));
-
-// Logging
 app.use(morgan('combined'));
 
 // API Routes
