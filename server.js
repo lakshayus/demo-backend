@@ -17,7 +17,7 @@ const analyticsRoutes = require('./routes/analytics');
 const healthRoutes = require('./routes/health');
 
 // Import middleware
-const errorHandler = require('./middleware/errorHandler');
+const { errorHandler, notFound } = require('./middleware/errorHandler');
 const authenticate = require('./middleware/auth');
 
 const app = express();
@@ -125,4 +125,9 @@ process.on('SIGINT', () => {
   process.exit(0);
 });
 
+app.use(notFound);       // handles 404
+app.use(errorHandler);   // handles all errors
+
 module.exports = app;
+
+

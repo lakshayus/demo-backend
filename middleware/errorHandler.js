@@ -1,9 +1,12 @@
+// middleware/errorHandler.js
+
 // Custom error class
 class AppError extends Error {
-  constructor(message, statusCode, isOperational = true) {
+  constructor(message, statusCode, isOperational = true, details = null) {
     super(message);
     this.statusCode = statusCode;
     this.isOperational = isOperational;
+    this.details = details;
     this.status = `${statusCode}`.startsWith('4') ? 'fail' : 'error';
 
     Error.captureStackTrace(this, this.constructor);
@@ -11,9 +14,8 @@ class AppError extends Error {
 }
 
 // Error handling middleware
-function errorHandler(error, req, res, next) {
-  let err = { ...error };
-  err.message = error.message;
+const errorHandler = (error, req, res, next) => {
+  let err = { ...error, message: error.message };
 
   // Log error
   console.error(`Error ${error.statusCode || 500}: ${error.message}`);
@@ -21,38 +23,20 @@ function errorHandler(error, req, res, next) {
     console.error(error.stack);
   }
 
-  // MySQL duplicate entry error
+  // Handle specific DB / JWT errors
   if (error.code === 'ER_DUP_ENTRY') {
-    const message = 'Duplicate entry found';
-    err = new AppError(message, 400);
-  }
-
-  // MySQL foreign key constraint error
-  if (error.code === 'ER_NO_REFERENCED_ROW_2') {
-    const message = 'Referenced record not found';
-    err = new AppError(message, 400);
-  }
-
-  // JSON Web Token error
-  if (error.name === 'JsonWebTokenError') {
-    const message = 'Invalid token';
-    err = new AppError(message, 401);
-  }
-
-  // JWT expired error
-  if (error.name === 'TokenExpiredError') {
-    const message = 'Token has expired';
-    err = new AppError(message, 401);
-  }
-
-  // Validation error
-  if (error.name === 'ValidationError') {
+    err = new AppError('Duplicate entry found', 400);
+  } else if (error.code === 'ER_NO_REFERENCED_ROW_2') {
+    err = new AppError('Referenced record not found', 400);
+  } else if (error.name === 'JsonWebTokenError') {
+    err = new AppError('Invalid token', 401);
+  } else if (error.name === 'TokenExpiredError') {
+    err = new AppError('Token has expired', 401);
+  } else if (error.name === 'ValidationError') {
     const errors = Object.values(error.errors).map(val => val.message);
-    const message = `Invalid input data. ${errors.join('. ')}`;
-    err = new AppError(message, 400);
+    err = new AppError(`Invalid input data. ${errors.join('. ')}`, 400);
   }
 
-  // Send error response
   const statusCode = err.statusCode || 500;
   const response = {
     success: false,
@@ -60,35 +44,29 @@ function errorHandler(error, req, res, next) {
     message: err.message || 'Internal server error',
   };
 
-  // Add stack trace in development
   if (process.env.NODE_ENV === 'development') {
     response.stack = error.stack;
   }
 
-  // Add error details for operational errors
-  if (err.isOperational) {
+  if (err.isOperational && err.details) {
     response.details = err.details;
   }
 
   res.status(statusCode).json(response);
-}
+};
 
 // Async error wrapper
-function asyncHandler(fn) {
-  return (req, res, next) => {
-    Promise.resolve(fn(req, res, next)).catch(next);
-  };
-}
+const asyncHandler = (fn) => (req, res, next) =>
+  Promise.resolve(fn(req, res, next)).catch(next);
 
 // Not found error handler
-function notFound(req, res, next) {
-  const error = new AppError(`Not found - ${req.originalUrl}`, 404);
-  next(error);
-}
+const notFound = (req, res, next) => {
+  next(new AppError(`Not found - ${req.originalUrl}`, 404));
+};
 
 module.exports = {
   AppError,
-  errorHandler,
-  asyncHandler,
-  notFound
+  errorHandler,   // middleware function
+  asyncHandler,   // wrapper
+  notFound        // 404 handler
 };

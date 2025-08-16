@@ -1,95 +1,112 @@
+// middleware/auth.js
 const jwt = require('jsonwebtoken');
 
-// Simple API key authentication for admin access
+/**
+ * Strict authentication middleware
+ * - Supports API key (x-api-key)
+ * - Supports JWT (Authorization: Bearer <token>)
+ */
 function authenticate(req, res, next) {
+  const authHeader = req.headers.authorization;
+  const apiKey = req.headers['x-api-key'];
+
   try {
-    const authHeader = req.headers.authorization;
-    const apiKey = req.headers['x-api-key'];
-    
-    // Check for API key
+    // 🔑 API key auth
     if (apiKey) {
       if (apiKey === process.env.API_KEY) {
         req.user = { role: 'admin', type: 'api_key' };
         return next();
-      } else {
+      }
+      return res.status(401).json({
+        success: false,
+        error: 'Unauthorized',
+        message: 'Invalid API key',
+      });
+    }
+
+    // 🔑 JWT auth
+    if (authHeader && authHeader.startsWith('Bearer ')) {
+      const token = authHeader.split(' ')[1]; // safer split
+      try {
+        const decoded = jwt.verify(token, process.env.JWT_SECRET);
+        req.user = decoded;
+        return next();
+      } catch (err) {
         return res.status(401).json({
+          success: false,
           error: 'Unauthorized',
-          message: 'Invalid API key'
+          message: 'Invalid or expired token',
         });
       }
     }
 
-    // Check for JWT token
-    if (authHeader && authHeader.startsWith('Bearer ')) {
-      const token = authHeader.substring(7);
-      
-      try {
-        const decoded = jwt.verify(token, process.env.JWT_SECRET);
-        req.user = decoded;
-        next();
-      } catch (error) {
-        return res.status(401).json({
-          error: 'Unauthorized',
-          message: 'Invalid or expired token'
-        });
-      }
-    } else {
-      return res.status(401).json({
-        error: 'Unauthorized',
-        message: 'No authentication token provided'
-      });
-    }
-  } catch (error) {
-    console.error('Authentication error:', error);
-    res.status(500).json({
-      error: 'Internal Server Error',
-      message: 'Authentication failed'
+    // ❌ No credentials
+    return res.status(401).json({
+      success: false,
+      error: 'Unauthorized',
+      message: 'No authentication token provided',
+    });
+  } catch (err) {
+    console.error('Authentication error:', err);
+    return res.status(500).json({
+      success: false,
+      error: 'ServerError',
+      message: 'Authentication failed',
     });
   }
 }
 
-// Optional authentication - allows both authenticated and non-authenticated requests
+/**
+ * Optional authentication middleware
+ * - If credentials valid → sets req.user
+ * - If invalid/no credentials → req.user = null, continues request
+ */
 function optionalAuth(req, res, next) {
+  const authHeader = req.headers.authorization;
+  const apiKey = req.headers['x-api-key'];
+
   try {
-    const authHeader = req.headers.authorization;
-    const apiKey = req.headers['x-api-key'];
-    
+    // API key
     if (apiKey && apiKey === process.env.API_KEY) {
       req.user = { role: 'admin', type: 'api_key' };
-    } else if (authHeader && authHeader.startsWith('Bearer ')) {
-      const token = authHeader.substring(7);
+    }
+    // JWT
+    else if (authHeader && authHeader.startsWith('Bearer ')) {
+      const token = authHeader.split(' ')[1];
       try {
-        const decoded = jwt.verify(token, process.env.JWT_SECRET);
-        req.user = decoded;
-      } catch (error) {
-        // Invalid token, but continue without authentication
-        req.user = null;
+        req.user = jwt.verify(token, process.env.JWT_SECRET);
+      } catch (err) {
+        req.user = null; // invalid token but allow request
       }
     } else {
-      req.user = null;
+      req.user = null; // no auth
     }
-    
-    next();
-  } catch (error) {
-    console.error('Optional authentication error:', error);
+
+    return next();
+  } catch (err) {
+    console.error('OptionalAuth error:', err);
     req.user = null;
-    next();
+    return next();
   }
 }
 
-// Generate JWT token
+/**
+ * Generate JWT
+ */
 function generateToken(payload) {
   return jwt.sign(payload, process.env.JWT_SECRET, {
-    expiresIn: process.env.JWT_EXPIRES_IN || '7d'
+    expiresIn: process.env.JWT_EXPIRES_IN || '7d',
   });
 }
 
-// Verify JWT token
+/**
+ * Verify JWT (utility function, not middleware)
+ */
 function verifyToken(token) {
   try {
     return jwt.verify(token, process.env.JWT_SECRET);
-  } catch (error) {
-    throw new Error('Invalid token');
+  } catch (err) {
+    return null; // safer than throwing, caller decides
   }
 }
 
@@ -97,5 +114,5 @@ module.exports = {
   authenticate,
   optionalAuth,
   generateToken,
-  verifyToken
+  verifyToken,
 };
