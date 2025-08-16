@@ -18,26 +18,31 @@ const healthRoutes = require('./routes/health');
 
 // Import middleware
 const { errorHandler, notFound } = require('./middleware/errorHandler');
-const { authenticate } = require('./middleware/auth'); // ✅ FIXED
+const { authenticate } = require('./middleware/auth');
 
 const app = express();
 const PORT = process.env.PORT || 3001;
+const NODE_ENV = process.env.NODE_ENV || 'development';
 
-// Security middleware
+// ----------------------
+// Security Middleware
+// ----------------------
 app.use(
   helmet({
-    contentSecurityPolicy: {
+    contentSecurityPolicy: NODE_ENV === 'production' ? {
       directives: {
         defaultSrc: ["'self'"],
         styleSrc: ["'self'", "'unsafe-inline'"],
         scriptSrc: ["'self'"],
         imgSrc: ["'self'", 'data:', 'https:'],
       },
-    },
+    } : false // disable CSP in dev (to avoid blocking React dev scripts)
   })
 );
 
-// Rate limiting
+// ----------------------
+// Rate Limiting
+// ----------------------
 const limiter = rateLimit({
   windowMs: 15 * 60 * 1000, // 15 minutes
   max: 100,
@@ -47,36 +52,43 @@ const limiter = rateLimit({
 });
 app.use(limiter);
 
-// CORS configuration
+// ----------------------
+// CORS Configuration
+// ----------------------
 app.use(
   cors({
-    origin: process.env.FRONTEND_URL || 'demo.framttt.com',
+    origin: process.env.FRONTEND_URL || 'http://localhost:3000',
     credentials: true,
     optionsSuccessStatus: 200,
   })
 );
 
-// Body parsing middleware
+// ----------------------
+// Middleware
+// ----------------------
 app.use(compression());
 app.use(express.json({ limit: '10mb' }));
 app.use(express.urlencoded({ extended: true, limit: '10mb' }));
-
-// Logging
 app.use(morgan('combined'));
 
+// ----------------------
 // API Routes
+// ----------------------
 app.use('/api/health', healthRoutes);
 app.use('/api/questionnaire', questionnaireRoutes);
 app.use('/api/demo', demoRoutes);
 app.use('/api/leads', authenticate, leadRoutes);
 app.use('/api/analytics', authenticate, analyticsRoutes);
 
-// Default route
+// ----------------------
+// Default Route
+// ----------------------
 app.get('/', (req, res) => {
   res.json({
     message: 'Framtt Backend API',
     version: '1.0.0',
     status: 'running',
+    environment: NODE_ENV,
     endpoints: {
       health: '/api/health',
       questionnaire: '/api/questionnaire',
@@ -87,30 +99,32 @@ app.get('/', (req, res) => {
   });
 });
 
-// 404 handler
+// ----------------------
+// Error Handlers
+// ----------------------
 app.use(notFound);
-
-// Error handling middleware (must be last)
 app.use(errorHandler);
 
-// Start server
-app.listen(PORT, () => {
+// ----------------------
+// Start Server
+// ----------------------
+const server = app.listen(PORT, () => {
   console.log(`🚀 Framtt Backend API running on port ${PORT}`);
-  console.log(`📊 Environment: ${process.env.NODE_ENV || 'development'}`);
-  console.log(
-    `🌐 Frontend URL: ${process.env.FRONTEND_URL || 'http://localhost:3000'}`
-  );
+  console.log(`📊 Environment: ${NODE_ENV}`);
+  console.log(`🌐 Frontend URL: ${process.env.FRONTEND_URL || 'http://localhost:3000'}`);
 });
 
-// Graceful shutdown
+// ----------------------
+// Graceful Shutdown
+// ----------------------
 process.on('SIGTERM', () => {
   console.log('SIGTERM received, shutting down gracefully...');
-  process.exit(0);
+  server.close(() => process.exit(0));
 });
 
 process.on('SIGINT', () => {
   console.log('SIGINT received, shutting down gracefully...');
-  process.exit(0);
+  server.close(() => process.exit(0));
 });
 
 module.exports = app;
