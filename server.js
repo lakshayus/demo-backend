@@ -18,7 +18,7 @@ const healthRoutes = require('./routes/health');
 
 // Import middleware
 const { errorHandler, notFound } = require('./middleware/errorHandler');
-const authenticate = require('./middleware/auth');
+const { authenticate } = require('./middleware/auth'); // ✅ FIXED
 
 const app = express();
 const PORT = process.env.PORT || 3001;
@@ -88,19 +88,7 @@ app.get('/', (req, res) => {
 });
 
 // 404 handler
-app.use('*', (req, res) => {
-  res.status(404).json({
-    error: 'Endpoint not found',
-    message: `Cannot ${req.method} ${req.originalUrl}`,
-    availableEndpoints: [
-      '/api/health',
-      '/api/questionnaire',
-      '/api/demo',
-      '/api/leads',
-      '/api/analytics',
-    ],
-  });
-});
+app.use(notFound);
 
 // Error handling middleware (must be last)
 app.use(errorHandler);
@@ -125,9 +113,4 @@ process.on('SIGINT', () => {
   process.exit(0);
 });
 
-app.use(notFound);       // handles 404
-app.use(errorHandler);   // handles all errors
-
 module.exports = app;
-
-
