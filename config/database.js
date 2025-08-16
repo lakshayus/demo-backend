@@ -5,24 +5,24 @@ const dotenv = require('dotenv');
 dotenv.config();
 
 const useDatabase = process.env.USE_DATABASE === 'true';
-
 let pool = null;
 
 if (useDatabase) {
   if (!process.env.DATABASE_URL) {
-    console.error('❌ USE_DATABASE=true but DATABASE_URL is missing in env');
+    console.error('❌ USE_DATABASE=true but DATABASE_URL is missing in .env');
   } else {
     pool = new Pool({
       connectionString: process.env.DATABASE_URL,
       ssl: { rejectUnauthorized: false }, // Supabase requires SSL
-      max: 5, // safe for serverless & Render limits
+      max: 5, // safe for Render / serverless
+      family: 4 // ✅ force IPv4 (avoids ENETUNREACH on Render)
     });
 
     // Test connection immediately
     (async () => {
       try {
-        await pool.query('SELECT NOW()');
-        console.log('✅ Database connected successfully (Supabase Postgres)');
+        const result = await pool.query('SELECT NOW()');
+        console.log('✅ Database connected successfully at', result.rows[0].now);
       } catch (error) {
         console.error('❌ Database connection failed:', error.message);
         process.exit(1);
@@ -33,7 +33,7 @@ if (useDatabase) {
   console.log('⚠️ Database is disabled (USE_DATABASE=false). Running without DB.');
 }
 
-// Convert `?` placeholders → Postgres `$1, $2...` if needed
+// Convert MySQL-style `?` placeholders → Postgres `$1, $2...`
 function toPositional(sql) {
   let i = 0;
   return sql.replace(/\?/g, () => `$${++i}`);
