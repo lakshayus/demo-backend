@@ -1,4 +1,5 @@
-const mysql = require('mysql2/promise');
+// config/database.js
+const { Pool } = require('pg');
 const dotenv = require('dotenv');
 
 dotenv.config();
@@ -8,74 +9,68 @@ const useDatabase = process.env.USE_DATABASE === 'true';
 let pool = null;
 
 if (useDatabase) {
-  const dbConfig = {
-    host: process.env.DB_HOST || 'localhost',
-    port: process.env.DB_PORT || 3306,
-    user: process.env.DB_USER || 'root',
-    password: process.env.DB_PASSWORD || '',
-    database: process.env.DB_NAME || 'framtt_demo',
-    waitForConnections: true,
-    connectionLimit: 10,
-    queueLimit: 0,
-    charset: 'utf8mb4'
-    // ❌ Removed acquireTimeout, timeout, reconnect (invalid in mysql2)
-  };
+  if (!process.env.DATABASE_URL) {
+    console.error('❌ USE_DATABASE=true but DATABASE_URL is missing in env');
+  } else {
+    pool = new Pool({
+      connectionString: process.env.DATABASE_URL,
+      ssl: { rejectUnauthorized: false }, // Supabase requires SSL
+      max: 5, // safe for serverless & Render limits
+    });
 
-  pool = mysql.createPool(dbConfig);
-
-  // Test connection
-  (async function testConnection() {
-    try {
-      const connection = await pool.getConnection();
-      console.log('✅ Database connected successfully');
-      connection.release();
-    } catch (error) {
-      console.error('❌ Database connection failed:', error.message);
-      // If DB is optional, don't exit
-      if (useDatabase) process.exit(1);
-    }
-  })();
+    // Test connection immediately
+    (async () => {
+      try {
+        await pool.query('SELECT NOW()');
+        console.log('✅ Database connected successfully (Supabase Postgres)');
+      } catch (error) {
+        console.error('❌ Database connection failed:', error.message);
+        process.exit(1);
+      }
+    })();
+  }
 } else {
   console.log('⚠️ Database is disabled (USE_DATABASE=false). Running without DB.');
 }
 
-// Helper function to execute queries
-async function query(sql, params = []) {
-  if (!pool) throw new Error('Database not enabled. Set USE_DATABASE=true in .env');
-  try {
-    const [results] = await pool.execute(sql, params);
-    return results;
-  } catch (error) {
-    console.error('Database query error:', error);
-    throw error;
-  }
+// Convert `?` placeholders → Postgres `$1, $2...` if needed
+function toPositional(sql) {
+  let i = 0;
+  return sql.replace(/\?/g, () => `$${++i}`);
 }
 
-// Helper function to execute transactions
+// Run single query
+async function query(sql, params = []) {
+  if (!pool) throw new Error('Database not enabled. Set USE_DATABASE=true in .env');
+  const text = process.env.MYSQL_STYLE_PARAMS === 'true' ? toPositional(sql) : sql;
+  const result = await pool.query(text, params);
+  return result.rows;
+}
+
+// Run transaction
 async function transaction(queries) {
   if (!pool) throw new Error('Database not enabled. Set USE_DATABASE=true in .env');
-  const connection = await pool.getConnection();
+  const client = await pool.connect();
   try {
-    await connection.beginTransaction();
-
+    await client.query('BEGIN');
     const results = [];
-    for (const { sql, params } of queries) {
-      const [result] = await connection.execute(sql, params);
-      results.push(result);
+    for (const { sql, params = [] } of queries) {
+      const text = process.env.MYSQL_STYLE_PARAMS === 'true' ? toPositional(sql) : sql;
+      const res = await client.query(text, params);
+      results.push(res.rows);
     }
-
-    await connection.commit();
+    await client.query('COMMIT');
     return results;
   } catch (error) {
-    await connection.rollback();
+    await client.query('ROLLBACK');
     throw error;
   } finally {
-    connection.release();
+    client.release();
   }
 }
 
 module.exports = {
   pool,
   query,
-  transaction
+  transaction,
 };
