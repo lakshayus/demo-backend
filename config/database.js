@@ -11,23 +11,17 @@ if (useDatabase) {
   if (!process.env.DATABASE_URL) {
     console.error('❌ USE_DATABASE=true but DATABASE_URL is missing in .env');
   } else {
-    pool = new Pool({
-      connectionString: process.env.DATABASE_URL,
-      ssl: { rejectUnauthorized: false }, // Supabase requires SSL
-      max: 5, // safe for Render / serverless
-      family: 4 // ✅ force IPv4 (avoids ENETUNREACH on Render)
-    });
+    // Ensure sslmode=require in case it's not in the env
+    const connectionString = process.env.DATABASE_URL.includes('sslmode=')
+      ? process.env.DATABASE_URL
+      : `${process.env.DATABASE_URL}?sslmode=require`;
 
-    // Test connection immediately
-    (async () => {
-      try {
-        const result = await pool.query('SELECT NOW()');
-        console.log('✅ Database connected successfully at', result.rows[0].now);
-      } catch (error) {
-        console.error('❌ Database connection failed:', error.message);
-        process.exit(1);
-      }
-    })();
+    pool = new Pool({
+      connectionString,
+      ssl: { rejectUnauthorized: false }, // required for Supabase
+      max: 5, // safe for Render
+      family: 4 // ✅ force IPv4 to avoid ENETUNREACH
+    });
   }
 } else {
   console.log('⚠️ Database is disabled (USE_DATABASE=false). Running without DB.');
@@ -69,8 +63,23 @@ async function transaction(queries) {
   }
 }
 
+// Optional: export a test function instead of crashing app on startup
+async function testConnection() {
+  if (!pool) {
+    console.log('⚠️ No database pool initialized.');
+    return;
+  }
+  try {
+    const result = await pool.query('SELECT NOW()');
+    console.log('✅ Database connected successfully at', result.rows[0].now);
+  } catch (error) {
+    console.error('❌ Database connection failed:', error.message);
+  }
+}
+
 module.exports = {
   pool,
   query,
   transaction,
+  testConnection,
 };
