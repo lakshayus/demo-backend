@@ -9,7 +9,7 @@ const dotenv = require('dotenv');
 // Load environment variables
 dotenv.config();
 
-// Import routes (these must each export an express.Router!)
+// Import routes
 const questionnaireRoutes = require('./routes/questionnaire');
 const demoRoutes = require('./routes/demo');
 const leadRoutes = require('./routes/leads');
@@ -24,20 +24,22 @@ const app = express();
 const PORT = process.env.PORT || 3001;
 
 // Security middleware
-app.use(helmet({
-  contentSecurityPolicy: {
-    directives: {
-      defaultSrc: ["'self'"],
-      styleSrc: ["'self'", "'unsafe-inline'"],
-      scriptSrc: ["'self'"],
-      imgSrc: ["'self'", "data:", "https:"],
+app.use(
+  helmet({
+    contentSecurityPolicy: {
+      directives: {
+        defaultSrc: ["'self'"],
+        styleSrc: ["'self'", "'unsafe-inline'"],
+        scriptSrc: ["'self'"],
+        imgSrc: ["'self'", 'data:', 'https:'],
+      },
     },
-  },
-}));
+  })
+);
 
 // Rate limiting
 const limiter = rateLimit({
-  windowMs: 15 * 60 * 1000,
+  windowMs: 15 * 60 * 1000, // 15 minutes
   max: 100,
   message: 'Too many requests from this IP, please try again later.',
   standardHeaders: true,
@@ -46,15 +48,20 @@ const limiter = rateLimit({
 app.use(limiter);
 
 // CORS configuration
-app.use(cors({
-  origin: process.env.FRONTEND_URL || 'http://localhost:3000',
-  credentials: true,
-  optionsSuccessStatus: 200
-}));
+app.use(
+  cors({
+    origin: process.env.FRONTEND_URL || 'http://localhost:3000',
+    credentials: true,
+    optionsSuccessStatus: 200,
+  })
+);
 
+// Body parsing middleware
 app.use(compression());
 app.use(express.json({ limit: '10mb' }));
 app.use(express.urlencoded({ extended: true, limit: '10mb' }));
+
+// Logging
 app.use(morgan('combined'));
 
 // API Routes
@@ -75,8 +82,8 @@ app.get('/', (req, res) => {
       questionnaire: '/api/questionnaire',
       demo: '/api/demo',
       leads: '/api/leads',
-      analytics: '/api/analytics'
-    }
+      analytics: '/api/analytics',
+    },
   });
 });
 
@@ -90,8 +97,8 @@ app.use('*', (req, res) => {
       '/api/questionnaire',
       '/api/demo',
       '/api/leads',
-      '/api/analytics'
-    ]
+      '/api/analytics',
+    ],
   });
 });
 
@@ -102,7 +109,9 @@ app.use(errorHandler);
 app.listen(PORT, () => {
   console.log(`🚀 Framtt Backend API running on port ${PORT}`);
   console.log(`📊 Environment: ${process.env.NODE_ENV || 'development'}`);
-  console.log(`🌐 Frontend URL: ${process.env.FRONTEND_URL || 'http://localhost:3000'}`);
+  console.log(
+    `🌐 Frontend URL: ${process.env.FRONTEND_URL || 'http://localhost:3000'}`
+  );
 });
 
 // Graceful shutdown

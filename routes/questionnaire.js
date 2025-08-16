@@ -21,16 +21,51 @@ const submitLimit = rateLimit({
 
 // Validation rules for questionnaire submission
 const validateQuestionnaireSubmission = [
-  body('sessionId').optional().isUUID().withMessage('Invalid session ID format'),
-  body('monitorRevenue').isBoolean().withMessage('monitorRevenue must be a boolean'),
-  body('seamlessCustomerChat').isBoolean().withMessage('seamlessCustomerChat must be a boolean'),
-  body('trackVehiclesLive').isBoolean().withMessage('trackVehiclesLive must be a boolean'),
-  body('useWhatsApp').isBoolean().withMessage('useWhatsApp must be a boolean'),
-  body('spendOnMarketing').isBoolean().withMessage('spendOnMarketing must be a boolean'),
-  body('useRentalSoftware').isBoolean().withMessage('useRentalSoftware must be a boolean'),
+  body('sessionId')
+    .optional()
+    .isUUID()
+    .withMessage('Invalid session ID format'),
+
+  body('monitorRevenue')
+    .isBoolean()
+    .withMessage('monitorRevenue must be a boolean'),
+
+  body('seamlessCustomerChat')
+    .isBoolean()
+    .withMessage('seamlessCustomerChat must be a boolean'),
+
+  body('trackVehiclesLive')
+    .isBoolean()
+    .withMessage('trackVehiclesLive must be a boolean'),
+
+  body('useWhatsApp')
+    .isBoolean()
+    .withMessage('useWhatsApp must be a boolean'),
+
+  body('spendOnMarketing')
+    .isBoolean()
+    .withMessage('spendOnMarketing must be a boolean'),
+
+  body('useRentalSoftware')
+    .isBoolean()
+    .withMessage('useRentalSoftware must be a boolean'),
+
+  // Middleware to check validation results
+  (req, res, next) => {
+    const errors = validationResult(req);
+    if (!errors.isEmpty()) {
+      return res.status(400).json({
+        error: 'Validation failed',
+        details: errors.array()
+      });
+    }
+    next();
+  }
 ];
 
 // Routes
+
+// Submit questionnaire
 router.post(
   '/submit',
   submitLimit,
@@ -38,27 +73,30 @@ router.post(
   asyncHandler(questionnaireController.submitQuestionnaire)
 );
 
+// Get solutions by sessionId
 router.get(
   '/solutions/:sessionId',
   asyncHandler(questionnaireController.getSolutions)
 );
 
+// Get questionnaire by sessionId
 router.get(
   '/:sessionId',
   asyncHandler(questionnaireController.getQuestionnaire)
 );
 
-// Admin routes (require authentication)
+// Admin: get all questionnaires (requires auth if available)
 router.get(
   '/',
   optionalAuth,
   asyncHandler(questionnaireController.getAllQuestionnaires)
 );
 
+// Admin: analytics overview (requires auth if available)
 router.get(
   '/analytics/overview',
   optionalAuth,
   asyncHandler(questionnaireController.getAnalytics)
 );
 
-module.exports = router;
+module.exports = router; // ✅ important: export ONLY the router
